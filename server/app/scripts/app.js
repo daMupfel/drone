@@ -233,13 +233,14 @@ app.controller("CommitController", function($scope, $http, $route, $routeParams,
 	var name   = $routeParams.name;
 	var branch = $routeParams.branch;
 	var commit = $routeParams.commit;
-	$scope.console='';
 	
-	var handleOutput = function(id, clearConsole) {
-		var lineFormatter = new Drone.LineFormatter();
-		var el = document.querySelector('#output');
-		if(clearConsole === true) {
-			el.innerHTML = ''; 
+	var lineFormatter = new Drone.LineFormatter();
+	var el = document.querySelector('#output');
+	$scope.content = '';
+	
+	var connectRemoteConsole = function(id) {
+		if(el.innerHTML !== '') {
+			el.innerHTML = '';
 		}
 		stdout.subscribe(id, function(out){
 			angular.element(el).append(lineFormatter.format(out));
@@ -250,10 +251,10 @@ app.controller("CommitController", function($scope, $http, $route, $routeParams,
 	}
 
 	feed.subscribe(function(item) {
-		if (item.commit.sha    == commit &&
-			item.commit.branch == branch) {
-			if(item.commit.status == "Started") {
-				handleOutput(item.commit.id, true);
+		if (item.commit.sha    === commit &&
+			item.commit.branch === branch) {
+			if(item.commit.status === "Started") {
+				connectRemoteConsole(item.commit.id);
 			}
 			$scope.commit = item.commit;
 			$scope.$apply();
@@ -279,11 +280,9 @@ app.controller("CommitController", function($scope, $http, $route, $routeParams,
 		success(function(data, status, headers, config) {
 			$scope.commit = data;
 
-			if (data.status!='Started' && data.status!='Pending') {
+			if (data.status !== 'Started' && data.status !== 'Pending') {
 				$http({method: 'GET', url: '/api/repos/'+remote+'/'+owner+"/"+name+"/branches/"+branch+"/commits/"+commit+"/console"}).
 					success(function(data, status, headers, config) {
-						var lineFormatter = new Drone.LineFormatter();
-						var el = document.querySelector('#output');
 						angular.element(el).append(lineFormatter.format(data));
 					}).
 					error(function(data, status, headers, config) {
@@ -292,24 +291,33 @@ app.controller("CommitController", function($scope, $http, $route, $routeParams,
 				return;
 			}
 
-			handleOutput(data.id, false);
+			connectRemoteConsole(data.id);
 		
 		}).
 		error(function(data, status, headers, config) {
 			console.log(data);
 		});
-
-	$scope.following = false;
+	
+	//need to parse since localStorage saves everything as strings
+	var followingStringRepresentation = localStorage.getItem('following');
+	if(followingStringRepresentation === null) {
+		$scope.following = false;
+	} else {
+		$scope.following = JSON.parse(followingStringRepresentation);
+	}
+	   
 	$scope.follow = function() {
 		$scope.following = true;
+		localStorage.setItem('following', $scope.following)
 		window.scrollTo(0, document.body.scrollHeight);
 	}
 	$scope.unfollow = function() {
 		$scope.following = false;
+		localStorage.setItem('following', $scope.following)
 	}
 
 	$scope.rebuildCommit = function() {
-        $http({method: 'POST', url: '/api/repos/'+remote+'/'+owner+'/'+name+'/'+'branches/'+branch+'/'+'commits/'+commit+'?action=rebuild' });
+		$http({method: 'POST', url: '/api/repos/'+remote+'/'+owner+'/'+name+'/'+'branches/'+branch+'/'+'commits/'+commit+'?action=rebuild' });
 	}
 
 
